@@ -1,0 +1,177 @@
+/*
+Functions inspired by Allin's addlist-package.
+
+Information criteria based forward selection of regressors.
+*/
+
+# public functions
+set verbose off
+
+function string model_estimation_cmd (const string model "'fe', 're', 'pooled'",
+                                      const bool with_candidate_list,
+                                      const bool verbose[0])
+    /* Construct string for executing model estimation. */
+
+    string model_cmd = "panel"
+    string name_depvar = "y"
+    if verbose
+        string verb = ""
+    else
+        string verb = "--quiet"
+    endif
+
+    if model == "fe"
+        string model_option = "--fixed-effects"
+    elif model == "re"
+        string model_option = "--random-effects"
+    elif model == "pooled"
+        string model_option = "--pooled"
+    else
+        printf "\nError: Unknown 'model' string passed.\n"
+        return ""
+    endif
+
+    if with_candidate_list
+        #string list_of_regs = "xlist candidate_list.$i"		# Does not wor, see comment in main function
+        string list_of_regs = "xlist add_var"
+    else
+        string list_of_regs = "xlist"
+    endif
+
+    string cmd = sprintf("%s %s %s %s %s", model_cmd, name_depvar, list_of_regs, model_option, verb)
+
+    return cmd
+end function
+
+
+function list AddListPanelModels (series y "dependent variable",
+                                    list xlist "initial regressors",
+                                    list candidate_list "candidates for addition",
+                                    int criterion[1:3:1] {"AIC", "BIC", "HQC"},
+                                    string model "'fe', 're', 'pooled'",
+                                    bool quiet[0])
+    /* Main Function. */
+
+    if nelem(xlist) == 0
+        printf "\nWarning: No initial specification was given.\n"
+        return xlist
+    elif nelem(candidate_list) == 0
+        printf "\nNo candidate regressors were provided.\n"
+        return xlist
+    elif nelem(xlist && candidate_list) > 0
+        printf "\nThe two list arguments must be disjoint.\n"
+        return xlist
+    endif
+
+    model = tolower(model)
+
+    # baseline panel estimation
+    string est_cmd = model_estimation_cmd(model, 0, 0)
+    catch @est_cmd
+
+    if $error
+        printf "\nError: Failed to estimate baseline panel model by '%s'.\n\
+          Return passed 'xlist'-members.\n", model
+
+        return xlist
+    endif
+
+    if criterion == 1
+        string critstr = "AIC"
+        string ctype = "$aic"
+        scalar critmin = $aic
+    elif criterion == 2
+        string critstr = "BIC"
+        string ctype = "$bic"
+        scalar critmin = $bic
+    elif criterion == 3
+        string critstr = "HQC"
+        string ctype = "$hqc"
+        scalar critmin = $hqc
+    else
+        printf "\nWarning: Only criterion AIC, BIC and HQC are supported.\n"
+        return xlist
+        /* "leverage" cmd not available for panel models
+           string critstr = "CVC"
+           leverage --quiet
+           scalar critmin = $test
+        */
+    endif
+    
+    string vname
+    string bestx
+    scalar crit
+    if !quiet
+        printf "Baseline:            %s = %g\n", critstr, critmin
+    endif
+    
+    scalar n_add = 0
+    loop while (nelem(candidate_list) > 0) --quiet
+        bestx = null
+        
+        loop foreach i candidate_list --quiet
+
+            string est_cmd = model_estimation_cmd(model, 1, 0)		# Does not work here due to '.' in string
+            string var_name = varnames(candidate_list)[i]
+            list add_var = @var_name
+            catch @est_cmd
+
+            if !$error
+            if criterion == 4					# case not supported
+                leverage --quiet
+                crit = $test
+            else
+                crit = @ctype
+            endif
+            if (crit < critmin)
+                critmin = crit
+                vname = "$i"
+                bestx = "candidate_list.$i"
+            endif
+            endif
+        endloop
+        
+        if strlen(bestx)
+            if !quiet
+                printf "Add %-16s %s = %g\n", vname, critstr, critmin
+            endif
+            xlist += @bestx
+            candidate_list -= @bestx
+            n_add++
+        else
+            break
+        endif
+
+    endloop
+    
+    if !quiet
+        if n_add > 0
+            printf "\nMinimized %s = %g, with these regressors:\n", critstr, critmin
+            string est_cmd = model_estimation_cmd(model, 0, quiet)
+            @est_cmd
+        else
+            printf "\nNo improvement was achieved, no regressors added\n"
+        endif
+    endif
+    
+    return xlist
+end function
+
+
+/*
+# Example
+open grunfeld.gdt -q
+
+list xlist = const time
+list candidate_list = value kstock
+
+scalar criterion = 1			# criterion[1:4:1] {"AIC", "BIC", "HQC"},
+string model = "re"
+scalar quiet = 1
+list final = AddListPanelModels(invest, xlist, candidate_list, criterion, model, quiet)
+
+final
+*/
+
+
+

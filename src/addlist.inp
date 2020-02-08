@@ -1,0 +1,75 @@
+function list addlist (series y "dependent variable",
+                       list list0 "initial regressors",
+                       list list1 "candidates for addition",
+                       int criterion[1:4:1] {"AIC", "BIC", "HQC", "CVC"},
+                       bool quiet[0])
+    if nelem(list0) == 0
+        funcerr "No initial specification was given"
+    elif nelem(list1) == 0
+        funcerr "No candidate regressors were provided"
+    elif nelem(list0 && list1) > 0
+        funcerr "The two list arguments must be disjoint"
+    endif
+    # baseline OLS
+    ols y list0 --quiet
+    if criterion == 1
+        string critstr = "AIC"
+        string ctype = "$aic"
+        scalar critmin = $aic
+    elif criterion == 2
+        string critstr = "BIC"
+        string ctype = "$bic"
+        scalar critmin = $bic
+    elif criterion == 3
+        string critstr = "HQC"
+        string ctype = "$hqc"
+        scalar critmin = $hqc
+    else
+        string critstr = "CVC"
+        leverage --quiet
+        scalar critmin = $test
+    endif
+    string vname
+    string bestx
+    scalar crit
+    if !quiet
+        printf "Baseline:            %s = %g\n", critstr, critmin
+    endif
+    scalar n_add = 0
+    loop while (nelem(list1) > 0) --quiet
+        bestx = null
+        loop foreach i list1 --quiet
+            ols y list0 list1.$i --quiet
+            if criterion == 4
+                leverage --quiet
+                crit = $test
+            else
+                crit = @ctype
+            endif
+            if (crit < critmin)
+                critmin = crit
+                vname = "$i"
+                bestx = "list1.$i"
+            endif
+        endloop
+        if strlen(bestx)
+            if !quiet
+                printf "Add %-16s %s = %g\n", vname, critstr, critmin
+            endif
+            list0 += @bestx
+            list1 -= @bestx
+            n_add++
+        else
+            break
+        endif
+    endloop
+    if !quiet
+        if n_add > 0
+            printf "\nMinimized %s = %g, with this model:\n", critstr, critmin
+            ols y list0
+        else
+            printf "\nNo improvement was achieved, no regressors added\n"
+        endif
+    endif
+    return list0
+end function
