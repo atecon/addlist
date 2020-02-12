@@ -21,52 +21,61 @@ function string get_quiet_string (const bool quiet)
 end function
 
 
-function string estimator_command (const string panel_estimator,
+function bundle dict_models (void)
+/* Dictionary including stuff for calling estimation
+    command and fcast command. */
+
+    bundle dict_models
+
+    dict_models.ols = defbundle( \
+      "command", "ols", \
+      "estimator_option", "" \
+      )
+    dict_models.fixed_effects = defbundle( \
+      "command", "panel", \
+      "estimator_option", "--fixed-effects" \
+      )
+    dict_models.random_effects = defbundle( \
+      "command", "panel", \
+      "estimator_option", "--random-effects" \
+      )
+    dict_models.pooled = defbundle( \
+      "command", "panel", \
+      "estimator_option", "--pooled" \
+      )
+
+    return dict_models
+end function
+
+
+function string estimator_command (string estimator_name,
                                    const bool with_candidate_list,
                                    const bool quiet)
-    /* */
+    /* Compile the string for calling the actual estimation command. */
 
     string quiet_str = get_quiet_string(quiet)
-    string estimator_cmd = ""
     string name_depvar = "y"
     string list_of_regs = "list0"
-    string estimator_option = ""
 
-    if panel_estimator == ""
-        string estimator_cmd = sprintf("ols")
-    else
-        string estimator_cmd = sprintf("panel")
-    endif
-
-    if estimator_cmd == "panel"
-        if model == "fe"
-            string estimator_option = "--fixed-effects"
-        elif model == "re"
-            string estimator_option = "--random-effects"
-        elif model == "pooled"
-            string estimator_option = "--pooled"
-        else
-            printf "\nError: Unknown 'panel estimator' string passed."
-            return ""
-        endif
-    endif
+    bundle model = dict_models()["@estimator_name"]
 
     if with_candidate_list
-        list_of_regs += " list1"
+        list_of_regs += " add_var"
     endif
 
-    string cmd = sprintf("%s %s %s %s %s", estimator_cmd, name_depvar, \
-      list_of_regs, estimator_option, quiet_str)
+    string cmd = sprintf("%s %s %s %s %s", model.command, name_depvar, \
+      list_of_regs, model.estimator_option, quiet_str)
 
     return cmd
 end function
 
 
-function scalar check_criterion (const string panel_estimator,
+# FIXME: "panel" is wrong!
+function scalar check_criterion (const string estimator_name,
                                  const int criterion)
     /* */
 
-    if panel_estimator != "" && criterion == 3
+    if estimator_name == "panel" && criterion == 3
         printf "\nError: The HQC criterion is not supported for panel models.\n"
         return 1
     endif
@@ -76,137 +85,205 @@ end function
 
 
 function bundle map_critierion_to_accessors (const int criterion[1:4:1])
-    /* */
+/* Map integer value selecting criterion to name and accessor
+    of specific information criterion. */
 
     bundle b = null
 
     if criterion == 1
-        string b.critstr = "AIC"
-        string b.ctype = "$aic"
+        string b.criterion_name = "AIC"
+        string b.criterion_accessor = "$aic"
     elif criterion == 2
-        string b.critstr = "BIC"
-        string b.ctype = "$bic"
+        string b.criterion_name = "BIC"
+        string b.criterion_accessor = "$bic"
     elif criterion == 3
-        string b.critstr = "HQC"
-        string b.ctype = "$hqc"
+        string b.criterion_name = "HQC"
+        string b.criterion_accessor = "$hqc"
     elif criterion == 4
-        string b.critstr = "CVC"
-        string b.ctype = "$test"
+        string b.criterion_name = "CVC"
+        string b.criterion_accessor = "$test"
     endif
 
     return b
 end function
 
 
+function void check_estimator_name (const string estimator_name)
+    /* Check whether estimator is actually supported. */
 
-function list addlist (series y "dependent variable",
-                       list list0 "initial regressors",
-                       list list1 "candidates for addition",
-                       const int criterion[1:4:1] {"AIC", "BIC", "HQC", "CVC"},
-                       const bool quiet[0],
-                       const string panel_estimator[null])
+    strings supported_estimators = getkeys(dict_models())
 
-    list L = null
-    string vname = ""
-    string bestx = ""
-    scalar crit = ""
-    scalar n_add = 0
-
-    if !exists(panel_estimator)
-        string panel_estimator = ""
-    else
-        panel_estimator = tolower(panel_estimator)
+    if nelem(strpos(supported_estimators, estimator_name)) == 0
+        printf "\nError: Variable 'estimator_name' must be either:\n"
+        loop i=1..nelem(supported_estimators) -q
+            printf "%s\n", supported_estimators[i]
+        endloop
+        funcerr ""
     endif
+end function
 
-    scalar ret = check_criterion(panel_estimator, criterion)
-    if ret
-        return L
-    endif
 
-    string str_ret = check_variable_lists(list0, list1)
-    if !strlen(str_ret)
-        return L
-    endif
 
-    string estimator_cmd = estimator_command(panel_estimator, 0, quiet)
+function list compute_final_list_of_vars (const series y,
+                                          list list0,
+                                          list list1,
+                                          const string estimator_name,
+                                          const bundle CRIT,
+                                          scalar criterion_minimum,
+                                          const bool quiet)
+    /* */
 
-    # baseline OLS
-    # ols y list0 --quiet
-    catch @estimator_cmd
-    if $error
-        printf "\nError: Failed to estimate baseline model by:\n\
-          '%s'\n", estimator_cmd
-        return L
-    endif
+    string criterion_accessor = CRIT.criterion_accessor
+    string name_added_var = ""
 
-    # Retrieve information criterion
-    bundle CRIT = map_critierion_to_accessors(criterion)
-    string critstr = CRIT.critstr
-    string ctype = CRIT.ctype
-    if critstr == "CVC"
-        leverage --quiet
-    endif
-    scalar crit = @critstr			# TODO: crit -> crit_value; 
-
-    if !quiet
-        printf "Baseline:            %s = %g\n", critstr, critmin
-    endif
-
-    # TODO: put this into a function
     loop while (nelem(list1) > 0) --quiet
-        bestx = null
-        loop foreach i list1 --quiet
+        string bestx = ""
 
-            #ols y list0 list1.$i --quiet
+        loop foreach i list1 --quiet
             # Ugly workaround needed due to '.' in string 'list1.$i'
-            string var_name = varnames(list1)[i]
-            list add_var = @var_name
-            string estimator_cmd = estimator_command(panel_estimator, 1, quiet)
+            string variable_name = varnames(list1)[i]
+            list add_var = @variable_name			# don't rename 'add_var'
+
+            string estimator_cmd = estimator_command(estimator_name, 1, 1)
             catch @estimator_cmd
-            
-            if $error
+            if $error					# TODO: put into function
                 if !quiet
                     printf "\nWarning: Adding '%s' yields estimation error.", var_name
                 endif
-                break
+                break		# TODO: Does this break work??
             endif
 
-            if critstr == "CVC"
+            if CRIT.criterion_name == "CVC"
                 leverage --quiet
             endif
-            crit = @ctype
+            scalar criterion_value = @criterion_accessor
 
-*** HIER WEITERMACHEN ***
-
-            if (crit < critmin)
-                critmin = crit
-                vname = "$i"
-                bestx = "list1.$i"
-            endif
-
+            scalar criterion_minimum = update_criterion_value(criterion_value, \
+              criterion_minimum, varnames(list1)[i], &bestx, &name_added_var)
         endloop
 
         if strlen(bestx)
-            if !quiet
-                printf "Add %-16s %s = %g\n", vname, critstr, critmin
-            endif
             list0 += @bestx
             list1 -= @bestx
-            n_add++
+            print_info_on_added_var(name_added_var, CRIT.criterion_name, \
+              criterion_minimum, quiet)
         else
             break
         endif
     endloop
 
+    return list0
+end function
+
+
+function void print_info_on_added_var (const string name_added_var,
+                                       string criterion_name,
+                                       const scalar criterion_minimum,
+                                       const bool quiet)
     if !quiet
-        if n_add > 0
-            printf "\nMinimized %s = %g, with this model:\n", critstr, critmin
-            string est_cmd = model_estimation_cmd(model, 0, quiet)
-            @est_cmd
+        printf "Add variable '%s' \t %s = %g\n", name_added_var, \
+          criterion_name, criterion_minimum
+    endif
+end function
+
+
+function scalar update_criterion_value (scalar criterion_value,
+                                        scalar criterion_minimum,
+                                        string variable_name,
+                                        string *bestx,
+                                        string *name_added_var)
+    /* Compare new criterion with current minimum value, and
+    update. */
+
+    if criterion_value < criterion_minimum
+        string name_added_var = variable_name
+        string bestx = sprintf("list1.%s", variable_name)
+        return criterion_value
+    else
+        return criterion_minimum
+    endif
+end function
+
+
+function list addlist (series y "dependent variable",
+                       list list0 "initial regressors",
+                       list list1 "candidates for addition",
+                       const int criterion[1:4:1] {"AIC", "BIC", "HQC", "CVC"},
+                       const bool quiet[1],
+                       string estimator_name[null] "Either ols, fixed_effects, random_effects, pooled")
+
+    list L = null
+
+    if !exists(estimator_name)
+        string estimator_name = "ols"
+    else
+        estimator_name = strstrip(tolower(estimator_name))
+    endif
+    check_estimator_name(estimator_name)
+
+    scalar ret = check_criterion(estimator_name, criterion)
+    if ret
+        return L
+    endif
+
+    check_variable_lists(list0, list1)
+    # TODO: currently 'check_variable_lists()' could fail hardly!
+    # TODO: alternative:
+    /*
+       string str_ret = check_variable_lists(list0, list1)
+       if !strlen(str_ret)
+       return L
+       endif
+    */
+
+    string estimator_cmd = estimator_command(estimator_name, 0, quiet)
+
+    catch @estimator_cmd
+    if $error				# TODO: put into function
+        printf "\nError: Failed to estimate baseline model by trying to execute:\n\
+          '%s'\n", estimator_cmd
+        return L
+    endif
+
+    bundle CRIT = map_critierion_to_accessors(criterion)
+    string criterion_accessor = CRIT.criterion_accessor
+
+    if CRIT.criterion_name == "CVC"
+        leverage --quiet
+    endif
+    scalar criterion_minimum = @criterion_accessor
+
+    if !quiet
+        printf "Baseline:            %s = %g\n", CRIT.criterion_name, criterion_minimum
+    endif
+
+    list final = compute_final_list_of_vars(y, list0, list1, estimator_name, \
+      CRIT, criterion_minimum, quiet)
+    
+    print_summary(y, list0, final, CRIT.criterion_name, criterion_minimum, \
+      estimator_name, quiet)
+
+    return final
+end function
+
+
+function void print_summary (const series y,
+                             const list list_init,
+                             const list list0 "final list of selected regressors",
+                             const string criterion_name,
+                             const scalar criterion_minimum,
+                             const string estimator_name,
+                             const bool quiet)
+    /* */
+
+    if !quiet
+        if nelem(list0) > nelem(list_init)
+            printf "\nMinimized %s = %g, with this model:\n", criterion_name, criterion_minimum
+
+            string estimator_cmd = estimator_command(estimator_name, 0, quiet)
+            @estimator_cmd
         else
             printf "\nNo improvement was achieved, no regressors added\n"
         endif
     endif
-
-    return list0
 end function

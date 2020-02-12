@@ -1,0 +1,35 @@
+clear
+set verbose off
+
+include string_utils.gfn
+
+if $sysinfo.hostname == "dsb"
+    include "/home/ninja/repo/addlist/src/addlist.inp"
+else
+    include "/home/at/git/addlist/src/addlist.inp"
+endif
+
+scalar DATA_SELECT = 1
+scalar QUIET = 0
+
+if DATA_SELECT == 1
+    string estimator_name = "pooled"
+    open grunfeld.gdt -q -p
+    list l1 = const
+    list l2 = value kstock time
+    series y = invest
+
+elif DATA_SELECT == 2
+    string estimator_name = "ols"
+    open data4-10
+    series y = ENROLL
+    list l1 = const CATHOL INCOME
+    list l2 = PUPIL WHITE ADMEXP REV MEMNEA COLLEGE
+endif
+
+# use AIC
+# note: add a final argument of 1 for quiet operation
+list final = addlist(y, l1, l2, 1, QUIET, estimator_name)
+
+# use BIC
+list final = addlist(y, l1, l2, 2, QUIET, estimator_name)
