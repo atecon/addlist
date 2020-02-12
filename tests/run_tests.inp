@@ -1,0 +1,534 @@
+set verbose off
+clear
+
+#string FILENAME = "foo.csv"		# dummy file
+
+include "./src/naiveFC.inp" --force
+include "./src/naiveFC_helper.inp" --force
+
+include CvDataSplitter.gfn
+include string_utils.gfn
+include assertion.gfn
+include extra.gfn
+
+
+nulldata 10
+smpl 1 5
+series y = normal()
+smpl full
+series x = normal()
+list L = y x
+function void test_valid_dates_of_y_and_xlist (const list L )
+    print "Start with valid_dates_of_y_and_xlist()"
+    
+    list xlist = null
+    bundle self = defbundle("horizon", 10, "xlist", \
+      xlist, "name_endo", "y", "t2_obsnum_y", 5)
+    assert_false(valid_dates_of_y_and_xlist(&self))
+    
+    # Series y and xlist members have equal number of observations
+    list xlist = x
+    bundle self = defbundle("horizon", 10, "xlist", xlist, "name_endo", "y", \
+      "t2_obsnum_y", 5, "t2_obsnum_xlist", 5, \
+      "t2_date_y", "5", "t2_date_xlist", "5")
+    assert_true(valid_dates_of_y_and_xlist(&self))
+
+    # Series y has more observations than xlist members
+    list xlist = x
+    bundle self = defbundle("horizon", 10, "xlist", xlist, "name_endo", "y", \
+      "t2_obsnum_y", 5, "t2_obsnum_xlist", 3, \
+      "t2_date_y", "5", "t2_date_xlist", "3")
+    assert_true(valid_dates_of_y_and_xlist(&self))
+    
+    # xlist members have t more future obs than y, but
+    # requested horizon is bigger than 't'
+    list xlist = x
+    bundle self = defbundle("horizon", 10, "xlist", xlist, "name_endo", "y", \
+      "t2_obsnum_y", 5, "t2_obsnum_xlist", 8, \
+      "t2_date_y", "5", "t2_date_xlist", "8")
+    assert_true(valid_dates_of_y_and_xlist(&self))
+    
+
+    # xlist members have t more future obs than y, and
+    # t > horizon
+    list xlist = x
+    bundle self = defbundle("horizon", 2, "xlist", xlist, "name_endo", "y", \
+      "t2_obsnum_y", 5, "t2_obsnum_xlist", 8, \
+      "t2_date_y", "5", "t2_date_xlist", "8")
+    assert_false(valid_dates_of_y_and_xlist(&self))
+
+end function
+test_valid_dates_of_y_and_xlist(L)
+
+
+function void test_compute_avgerage_forecast (void)
+    print "Start with compute_avgerage_forecast()"
+
+    bundle self = null
+    scalar self.error = 0
+    scalar self.horizon = 4
+    scalar self.n_folds = 2
+    strings self.models = defarray("meanfc", "ar1fc")
+    bundle forecast_results = null
+    matrix forecasts_point = seq(1,4)' ~ seq(4,1)'
+    matrix forecasts_lower_bound = 0.5*seq(1,4)' ~ 0.5*seq(4,1)'
+    matrix forecasts_upper_bound = 1.5*seq(1,4)' ~ 1.5*seq(4,1)'
+    bundle forecast_results.meanfc = null
+    bundle forecast_results.ar1fc = null
+    forecast_results.meanfc.forecasts_point = forecasts_point
+    forecast_results.meanfc.forecasts_lower_bound = forecasts_lower_bound
+    forecast_results.meanfc.forecasts_upper_bound = forecasts_upper_bound
+    forecast_results.ar1fc.forecasts_point = forecasts_point .+ 1
+    forecast_results.ar1fc.forecasts_lower_bound = forecasts_lower_bound .+ 1
+    forecast_results.ar1fc.forecasts_upper_bound = forecasts_upper_bound .+ 1
+    bundle self.forecast_results = forecast_results
+
+    bundle avgfc = compute_avgerage_forecast(&self)
+
+    assert_equal_num(nelem(avgfc), 3)
+    assert_equal_num(cols(avgfc.forecasts_point), 2)
+    assert_equal_num(rows(avgfc.forecasts_point), 4)
+    assert_equal_num(cols(avgfc.forecasts_lower_bound), 2)
+    assert_equal_num(rows(avgfc.forecasts_lower_bound), 4)
+    assert_equal_num(cols(avgfc.forecasts_upper_bound), 2)
+    assert_equal_num(rows(avgfc.forecasts_upper_bound), 4)
+
+    assert_equal_num(avgfc.forecasts_point[1,1], 1.5)
+    assert_equal_num(avgfc.forecasts_point[2,1], 2.5)
+    assert_equal_num(avgfc.forecasts_point[3,1], 3.5)
+    assert_equal_num(avgfc.forecasts_point[4,1], 4.5)
+
+    assert_equal_num(avgfc.forecasts_point[1,2], 4.5)
+    assert_equal_num(avgfc.forecasts_point[2,2], 3.5)
+    assert_equal_num(avgfc.forecasts_point[3,2], 2.5)
+    assert_equal_num(avgfc.forecasts_point[4,2], 1.5)
+
+    assert_equal_num(avgfc.forecasts_lower_bound[1,1], 1)
+    assert_equal_num(avgfc.forecasts_lower_bound[2,1], 1.5)
+    assert_equal_num(avgfc.forecasts_lower_bound[3,1], 2)
+    assert_equal_num(avgfc.forecasts_lower_bound[4,1], 2.5)
+
+    assert_equal_num(avgfc.forecasts_lower_bound[1,2], 2.5)
+    assert_equal_num(avgfc.forecasts_lower_bound[2,2], 2)
+    assert_equal_num(avgfc.forecasts_lower_bound[3,2], 1.5)
+    assert_equal_num(avgfc.forecasts_lower_bound[4,2], 1)
+
+    assert_equal_num(avgfc.forecasts_upper_bound[1,1], 2)
+    assert_equal_num(avgfc.forecasts_upper_bound[2,1], 3.5)
+    assert_equal_num(avgfc.forecasts_upper_bound[3,1], 5)
+    assert_equal_num(avgfc.forecasts_upper_bound[4,1], 6.5)
+
+    assert_equal_num(avgfc.forecasts_upper_bound[1,2], 6.5)
+    assert_equal_num(avgfc.forecasts_upper_bound[2,2], 5)
+    assert_equal_num(avgfc.forecasts_upper_bound[3,2], 3.5)
+    assert_equal_num(avgfc.forecasts_upper_bound[4,2], 2)
+
+    bundle self = null
+    scalar self.error = 0
+    scalar self.horizon = 10
+    scalar self.n_folds = 2
+    strings self.models = defarray("meanfc")
+    bundle forecast_results = null
+    matrix forecasts_point = seq(1,10)' ~ seq(10,1)'
+    matrix forecasts_lower_bound = 0.5*seq(1,10)' ~ 0.5*seq(10,1)'
+    matrix forecasts_upper_bound = 1.5*seq(1,10)' ~ 1.5*seq(10,1)'
+    bundle forecast_results.meanfc = null
+    forecast_results.meanfc.forecasts_point = forecasts_point
+    forecast_results.meanfc.forecasts_lower_bound = forecasts_lower_bound
+    forecast_results.meanfc.forecasts_upper_bound = forecasts_upper_bound
+    bundle self.forecast_results = forecast_results
+
+    bundle avgfc = compute_avgerage_forecast(&self)
+    assert_false(nelem(avgfc))
+end function
+
+
+function void test_prepare_forecast_bundles (void)
+    print "Start with prepare_forecast_bundles()"
+
+    scalar is_seas = 1
+    bundle b = defbundle("models", get_estimator_names(is_seas))
+    b = prepare_forecast_bundles(&b)
+    bundle fc = b.snaivefc
+
+    assert_equal_num(nelem(b), 10)
+    assert_true(inbundle(b, snaivefc))
+    assert_equal_num(nelem(fc), 0)
+end function
+
+
+function void test_fc_interval_width (void)
+    print "Start with fc_interval_width()"
+
+    matrix m = ones(2,1)
+    m[1] = NA
+
+    matrix y = fc_interval_width(m, 0.9)
+
+    assert_false(ok(y[1]))
+    assert_almost_equal_num(y[2], 1.644, 1e-3)
+end function
+
+
+function void test_gen_column_names (void)
+    print "Start with gen_column_names()"
+
+    bundle b = defbundle("which", "rw", "level", 0.9)
+    strings S = gen_column_names(&b)
+    assert_equal_num(nelem(S), 3)
+    assert_equal_str(S[1], "rw")
+    assert_equal_str(S[2], "Lo (5.0)")
+    assert_equal_str(S[3], "Up (95.0)")
+
+    bundle b = defbundle("which", "avgfc", "level", 0.9)
+    strings S = gen_column_names(&b)
+    assert_equal_num(nelem(S), 1)
+    assert_equal_str(S[1], "avgfc")
+end function
+
+
+function void test_array_of_horizon_labels (void)
+    print "Start with array_of_horizon_labels()"
+
+    strings S = array_of_horizon_labels(2)
+    assert_equal_str(S[1], "h=1")
+    assert_equal_str(S[2], "h=2")
+end function
+
+
+# NOTE: 'open' cannot be used inside functions
+open djclose.gdt -q
+function void test_attach_column_labels()
+    print "Start with attach_column_labels()"
+
+    bundle self = null
+    string self.t1_forecast_date = "1981-03-06"
+    scalar self.n_folds = 3
+    matrix mat = mnormal(4,3)
+    bundle iv = defbundle("mat1", mat, "mat2", mat)
+
+    attach_column_labels(&iv, self)
+
+    strings test_dates = cnameget(iv.mat1)
+    assert_equal_str(test_dates[1], "1981-03-05")
+    assert_equal_str(test_dates[2], "1981-03-06")
+    assert_equal_str(test_dates[3], "1981-03-09")
+
+    strings test_dates = cnameget(iv.mat2)
+    assert_equal_str(test_dates[1], "1981-03-05")
+    assert_equal_str(test_dates[2], "1981-03-06")
+    assert_equal_str(test_dates[3], "1981-03-09")
+end function
+test_attach_column_labels()
+
+
+open denmark.gdt -q -p
+function void test_future_date_strings_q (void)
+    print "Start with future_date_strings() quarterly"
+
+    strings S = future_date_strings("1980:1", 2)
+    assert_equal_str(S[1], "1980:2")
+    assert_equal_str(S[2], "1980:3")
+end function
+test_future_date_strings_q()
+
+open hendry_jae.gdt -q -p
+function void test_future_date_strings_a (void)
+    print "Start with future_date_strings() annual"
+
+    strings S = future_date_strings("1899", 2)
+    assert_equal_str(S[1], "1900")
+    assert_equal_str(S[2], "1901")
+end function
+test_future_date_strings_a()
+
+open hamilton.gdt -q -p
+function void test_future_date_strings_m (void)
+    print "Start with future_date_strings() monthly"
+
+    strings S = future_date_strings("1982:07", 2)
+    assert_equal_str(S[1], "1982:08")
+    assert_equal_str(S[2], "1982:09")
+end function
+test_future_date_strings_m()
+
+
+open djclose.gdt -q -p
+function void test_future_date_strings_d (void)
+    print "Start with future_date_strings() daily"
+
+    strings S = future_date_strings("1982-07-30", 2)
+    assert_equal_str(S[1], "1982-08-02")
+    assert_equal_str(S[2], "1982-08-03")
+end function
+test_future_date_strings_d()
+
+
+function void test_set_bundle (const series djclose)
+    print "Start with set_bundle()"
+
+    bundle Bret = set_bundle(djclose, "avg", \
+      defbundle("horizon", 7, "level", \
+      0.05, "type_moving_window", "rolling"))
+
+    assert_equal_num(Bret.horizon, 7)
+    assert_equal_num(Bret.level, 0.05)
+    assert_equal_str(Bret.type_moving_window, "rolling")
+    assert_equal_str(Bret.name_endo, "djclose")
+
+
+    bundle Bret = set_bundle(djclose, "avg")
+    assert_equal_num(Bret.horizon, 10)
+    assert_equal_num(Bret.level, 0.9)
+    assert_equal_str(Bret.type_moving_window, "static")
+    assert_equal_str(Bret.name_endo, "djclose")
+end function
+
+function void test_get_supported_ns_methods (void)
+    print "Start with get_supported_nonseas_methods()"
+
+    strings S = get_supported_nonseas_methods()
+    assert_equal_num(nelem(S), 7)
+
+    assert_equal_str(S[1], "meanfc")
+    assert_equal_str(S[2], "medianfc")
+    assert_equal_str(S[3], "rwfc")
+    assert_equal_str(S[4], "rwdriftfc")
+    assert_equal_str(S[5], "ar1fc")
+    assert_equal_str(S[6], "ar1trendfc")
+    assert_equal_str(S[7], "avgfc")
+end function
+
+
+function void test_get_supported_seas_methods (void)
+    print "Start with get_supported_seas_methods()"
+
+    strings S = get_supported_seas_methods()
+
+    assert_equal_str(S[1], "smeanfc")
+    assert_equal_str(S[2], "smedianfc")
+    assert_equal_str(S[3], "snaivefc")
+    assert_equal_str(S[4], "snaivedriftfc")
+end function
+
+
+function void test_get_estimator_names (void)
+    print "Start with get_estimator_names()"
+
+    scalar is_seas = 0
+    strings S = get_estimator_names(is_seas)
+    assert_equal_num(nelem(S), 6)
+
+    scalar is_seas = 1
+    strings S = get_estimator_names(is_seas)
+    assert_equal_num(nelem(S), 10)
+end function
+
+
+
+# As 'nulldata' command is applied below, we call some tests already here
+test_compute_avgerage_forecast()
+test_prepare_forecast_bundles()
+test_fc_interval_width()
+test_gen_column_names()
+test_array_of_horizon_labels()
+test_set_bundle(djclose)
+test_get_supported_ns_methods()
+test_get_supported_seas_methods()
+test_get_estimator_names()
+
+
+nulldata 24 -p
+setobs 1 1 --time-series
+function void test_get_highest_pd_series_a (void)
+    print "Start with get_highest_period_series() annual"
+
+    series ser = get_highest_period_series()
+    assert_equal_num(min(ser), 1)
+    assert_equal_num(max(ser), 24)
+end function
+test_get_highest_pd_series_a()
+
+setobs 4 2000:1 --time-series
+function void test_get_highest_pd_series_q (void)
+    print "Start with get_highest_period_series() quarterly"
+
+    series ser = get_highest_period_series()
+    assert_equal_num(min(ser), 1)
+    assert_equal_num(max(ser), 4)
+end function
+test_get_highest_pd_series_q()
+
+setobs 5 2000-01-01 --time-series
+function void test_get_highest_pd_series_bd (void)
+    print "Start with get_highest_period_series() bdaily"
+
+    series ser = get_highest_period_series()
+    assert_equal_num(ser[1], 3)
+    assert_equal_num(min(ser), 1)
+    assert_equal_num(max(ser), 31)
+end function
+test_get_highest_pd_series_bd()
+
+nulldata 40 -p
+setobs 7 2000-01-01 --time-series
+function void test_get_highest_pd_series_d (void)
+    print "Start with get_highest_period_series() daily"
+
+    series ser = get_highest_period_series()
+    assert_equal_num(min(ser), 1)
+    assert_equal_num(max(ser), 31)
+end function
+test_get_highest_pd_series_d()
+
+
+nulldata 400 -p
+setobs 12 2000:01 --time-series
+function void test_get_highest_pd_series_m (void)
+    print "Start with get_highest_period_series() monthly"
+    series ser = get_highest_period_series()
+    assert_equal_num(min(ser), 1)
+    assert_equal_num(max(ser), 12)
+end function
+test_get_highest_pd_series_m()
+
+
+print "Start with add_ohe_periods_to_list()"
+nulldata 40 -p
+setobs 7 2000-01-01 --time-series
+function void test_add_ohe_periods_to_list (void)
+    print "Start with add_ohe_periods_to_list()"
+
+    list L = add_ohe_periods_to_list()
+    assert_equal_num(nelem(L), 30)
+end function
+
+
+function void test_add_linear_trend_to_list (void)
+    print "Start with add_linear_trend_to_list()"
+
+    list L = add_linear_trend_to_list()
+    assert_equal_num(nelem(L), 1)
+end function
+
+
+function void test_add_intercept_to_list (void)
+    print "Start with add_intercept_to_list()"
+
+    L = add_intercept_to_list()
+    assert_equal_num(nelem(L), 1)
+end function
+
+test_add_ohe_periods_to_list()
+test_add_linear_trend_to_list()
+test_add_intercept_to_list()
+
+
+nulldata 40 -p
+setobs 7 2000-01-01 --time-series
+function void test_get_train_start_end_obs_d (void)
+    print "Start with get_train_start_end_obsnums() daily"
+
+    bundle B = null
+    string B.t1_date_y = "2000-01-01"
+    string B.t2_date_y = "2000-01-31"
+    scalar B.horizon_current = 2
+    string B.type_moving_window = "static"
+
+    bundle Bret = get_train_start_end_obsnums(B)
+
+    assert_equal_num(nelem(Bret), 2)
+    assert_true(inbundle(Bret, "t1_obsnum"))
+    assert_true(inbundle(Bret, "t2_obsnum"))
+    assert_equal_num(Bret.t1_obsnum, 1)
+    assert_equal_num(Bret.t2_obsnum, 31)
+
+    string B.t1_date_y = "2000-01-02"
+    string B.t2_date_y = "2000-02-03"
+    bundle Bret = get_train_start_end_obsnums(B)
+    assert_equal_num(Bret.t1_obsnum, 2)
+    assert_equal_num(Bret.t2_obsnum, 34)
+end function
+test_get_train_start_end_obs_d()
+
+
+nulldata 7 -p
+setobs 7 2000-01-01 --time-series
+function void test_get_train_start_end_obs_dd (void)
+    print "Start with get_train_start_end_obsnums() daily"
+
+    bundle B = null
+    scalar B.horizon_current = 2
+    string B.type_moving_window = "rolling"
+    scalar B.window_length = 5
+
+    bundle Bret = get_train_start_end_obsnums(B)
+    assert_equal_num(nelem(Bret), 2)
+    assert_true(inbundle(Bret, "t1_obsnum"))
+    assert_true(inbundle(Bret, "t2_obsnum"))
+    assert_equal_num(Bret.t1_obsnum, 1)
+    assert_equal_num(Bret.t2_obsnum, 5)
+
+    scalar B.window_length = 8
+    bundle Bret = get_train_start_end_obsnums(B)
+    assert_equal_num(Bret.t1_obsnum, -2)
+    assert_equal_num(Bret.t2_obsnum, 5)
+end function
+test_get_train_start_end_obs_dd()
+
+
+# Run complete examples
+open AWM.gdt -q			# quarterly
+series y = YGA
+smpl y --no-missing --permanent		# no future data available --> error
+function void test_naiveFC_meanfc_awm_stat (series y)
+    printf "Start test_naiveFC() ('meanfc') for 'static' \n\
+      case with AWM_data with insufficient future values"
+
+    scalar horizon = 10
+    bundle opts = null					# setup additional options
+    opts.horizon = horizon
+
+    bundle b = null
+    bundle b = naiveFC(y, "meanfc", opts)
+    assert_true(b.error)
+end function
+test_naiveFC_meanfc_awm_stat(y)
+
+
+open AWM.gdt -q			# quarterly
+series y = YGA
+function void test_naiveFC_meanfc_awm_stat (series y)
+    printf "Start test_naiveFC() ('meanfc') for 'static'\n\
+      case with AWM_data with 2 future values but requested\n\
+      horizon is 10."
+
+    scalar horizon = 10
+    bundle opts = null					# setup additional options
+    opts.horizon = horizon
+
+    bundle b = null
+    bundle b = naiveFC(y, "meanfc", opts)
+    assert_true(b.error)
+end function
+test_naiveFC_meanfc_awm_stat(y)
+
+
+printf "\nInfo: All tests passed.\n"
+
+# do_naive_forecasting
+# do_initial_checks
+# drop_missing_values
+# nobs_to_add_to_dataset
+# summarize_naive_fc_results
+
+/* Function not finisched yet!
+   matrix m = mshape(seq(1,9)',3,2)
+   matrices M = defarray(m)
+   bundle B = get_mean_fc_and_mean_sd(M)
+   B
+   eval B.fc_point_avg
+*/
+
+
+
