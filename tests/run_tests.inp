@@ -101,7 +101,7 @@ function void test_criterion_is_supported (void)
     string estimator_name = "fixed_effects"
     loop i=1..4 -q
         scalar scal = criterion_is_supported(estimator_name, $i)
-        if i != 3
+        if i != 4
             assert_true(scal)
         else
             assert_false(scal)
@@ -111,7 +111,7 @@ function void test_criterion_is_supported (void)
     string estimator_name = "random_effects"
     loop i=1..4 -q
         scalar scal = criterion_is_supported(estimator_name, $i)
-        if i != 3
+        if i != 4
             assert_true(scal)
         else
             assert_false(scal)
@@ -121,7 +121,7 @@ function void test_criterion_is_supported (void)
     string estimator_name = "pooled"
     loop i=1..4 -q
         scalar scal = criterion_is_supported(estimator_name, $i)
-        if i != 3
+        if i != 4
             assert_true(scal)
         else
             assert_false(scal)
@@ -377,21 +377,103 @@ end function
 test_compute_final_list_of_vars(invest, dataset)
 
 
-*** HIER WEITZERMACHEN FÜR CVC
+function void test_compute_final_list_of_vars (series y, list data_set)
+    print "Start with compute_final_list_of_vars():"
+    print "Based on estimator, some variables should be added based on CVC"
 
-
-
-
-
-
-
-open grunfeld.gdt -q -p
-function void test_addlist (series y, list data_set)
+    scalar quiet = 0
+    series y = data_set.invest
     
+    list L0 = const 
+    list L1 = data_set.value data_set.kstock data_set.time
+    scalar criterion = 4
+    bundle CRIT = map_critierion_to_accessors(criterion)
     
+    scalar criterion_minimum = 2500
+    string estimator_name = "ols"
+    list L2 = compute_final_list_of_vars(y, L0, L1, estimator_name, CRIT, \
+      criterion_minimum, quiet)
+    assert_equal_num(nelem(L2), 1)
+    assert_equal_str(varnames(L2)[1], "const")
 
+    scalar criterion_minimum = 3000000
+    string estimator_name = "ols"
+    list L2 = compute_final_list_of_vars(y, L0, L1, estimator_name, CRIT, \
+      criterion_minimum, quiet)
+    assert_equal_num(nelem(L2), 3)
+    assert_equal_str(varnames(L2)[1], "const")
+    assert_equal_str(varnames(L2)[2], "value")
+    assert_equal_str(varnames(L2)[3], "kstock")
 end function
-test_addlist((invest, dataset))
+test_compute_final_list_of_vars(invest, dataset)
+
+
+
+function void test_addlist_pooled (series y, list data_set)
+    print "Start with addlist(): pooled-ols"
+    
+    string estimator_name = "pooled"
+    scalar quiet = 1
+    series y = data_set.invest    
+    list L0 = const 
+    list L1 = data_set.value data_set.kstock data_set.time
+    
+    loop i=1..4 -q
+        list final = addlist(y, L0, L1, $i, quiet, estimator_name)
+    endloop
+end function
+test_addlist_pooled(invest, dataset)
+
+
+function void test_addlist_fixedeffects (series y, list data_set)
+    print "Start with addlist(): fixed-effects"
+    
+    string estimator_name = "fixed_effects"
+    scalar quiet = 1
+    series y = data_set.invest    
+    list L0 = const 
+    list L1 = data_set.value data_set.kstock data_set.time
+    
+    loop i=1..4 -q
+        list final = addlist(y, L0, L1, $i, quiet, estimator_name)
+    endloop
+end function
+test_addlist_fixedeffects(invest, dataset)
+
+
+function void test_addlist_randomeffects (series y, list data_set)
+    print "Start with addlist(): random-effects"
+    
+    string estimator_name = "random_effects"
+    scalar quiet = 1
+    series y = data_set.invest    
+    list L0 = const 
+    list L1 = data_set.value data_set.kstock data_set.time
+    
+    loop i=1..4 -q
+        list final = addlist(y, L0, L1, $i, quiet, estimator_name)
+    endloop
+end function
+test_addlist_randomeffects(invest, dataset)
+
+
+open data4-10 -p -q
+function void test_addlist_ols (series y, list data_set)
+    print "Start with addlist(): ols"
+    
+    string estimator_name = "ols"
+    scalar quiet = 1
+    series y = data_set.ENROLL
+    list L0 = const data_set.CATHOL INCOME 
+    list L1 = data_set.PUPIL data_set.WHITE data_set.ADMEXP \
+      data_set.REV data_set.MEMNEA data_set.COLLEGE
+    
+    loop i=1..4 -q
+        list final = addlist(y, L0, L1, $i, quiet, estimator_name)
+    endloop
+end function
+test_addlist_ols(ENROLL, dataset)
+
 
 
 

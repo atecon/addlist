@@ -79,8 +79,8 @@ function scalar criterion_is_supported (const string estimator_name,
 
     bundle CRIT = map_critierion_to_accessors(criterion)
 
-    if estimator_name != "ols" && CRIT.criterion_name == "HQC"
-        printf "\nError: The HQC criterion is not supported for panel estimators.\n"
+    if estimator_name != "ols" && CRIT.criterion_name == "CVC"
+        printf "\nError: The CVC criterion is not supported for panel estimators.\n"
         return 0
     endif
 
@@ -186,7 +186,7 @@ end function
 
 function void print_info_on_added_var (const string name_added_var,
                                        string criterion_name,
-                                       const scalar criterion_minimum[1::],
+                                       const scalar criterion_minimum,
                                        const bool quiet)
     if !quiet
         printf "\nAdd variable '%s' \t %s = %g\n", name_added_var, \
@@ -237,7 +237,7 @@ function list addlist (series y "dependent variable",
 
     check_variable_lists(list0, list1)
     # TODO: currently 'check_variable_lists()' could fail hardly!
-    # TODO: alternative:
+    # TODO: use alternatively:
     /*
        string str_ret = check_variable_lists(list0, list1)
        if !strlen(str_ret)
