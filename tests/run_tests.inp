@@ -25,24 +25,24 @@ test_get_quiet_string()
 
 function void test_dict_models (void)
     print "Start with dict_models()"
-    
+
     bundle models = dict_models()
     strings keys = getkeys(models)
-    
+
     assert_equal_num(nelem(models), 4)
     assert_equal_num(nelem(keys), 4)
-    
+
     assert_true(inbundle(models, "ols"))
     assert_true(inbundle(models, "fixed_effects"))
     assert_true(inbundle(models, "random_effects"))
-    assert_true(inbundle(models, "pooled"))    
+    assert_true(inbundle(models, "pooled"))
 end function
 test_dict_models()
 
 
 function void test_estimator_command (void)
     print "Start with dict_models()"
-    
+
     string estimator_name = "ols"
     scalar with_candidate_list = 0
     scalar quiet = 0
@@ -53,47 +53,47 @@ function void test_estimator_command (void)
     scalar with_candidate_list = 1
     scalar quiet = 0
     string str = estimator_command(estimator_name, with_candidate_list, quiet)
-    assert_equal_str(strstrip(str), "ols y list0 candidate_vars")    
+    assert_equal_str(strstrip(str), "ols y list0 candidate_vars")
 
     string estimator_name = "ols"
     scalar with_candidate_list = 0
     scalar quiet = 1
     string str = estimator_command(estimator_name, with_candidate_list, quiet)
-    assert_equal_str(strstrip(str), "ols y list0  --quiet")    
+    assert_equal_str(strstrip(str), "ols y list0  --quiet")
 
     string estimator_name = "ols"
     scalar with_candidate_list = 1
     scalar quiet = 1
     string str = estimator_command(estimator_name, with_candidate_list, quiet)
-    assert_equal_str(strstrip(str), "ols y list0 candidate_vars  --quiet")    
+    assert_equal_str(strstrip(str), "ols y list0 candidate_vars  --quiet")
 
     string estimator_name = "fixed_effects"
     scalar with_candidate_list = 1
     scalar quiet = 1
     string str = estimator_command(estimator_name, with_candidate_list, quiet)
     assert_equal_str(strstrip(str), \
-      "panel y list0 candidate_vars --fixed-effects --quiet")   
+      "panel y list0 candidate_vars --fixed-effects --quiet")
 
     string estimator_name = "random_effects"
     scalar with_candidate_list = 1
     scalar quiet = 1
     string str = estimator_command(estimator_name, with_candidate_list, quiet)
     assert_equal_str(strstrip(str), \
-      "panel y list0 candidate_vars --random-effects --quiet") 
+      "panel y list0 candidate_vars --random-effects --quiet")
 
     string estimator_name = "pooled"
     scalar with_candidate_list = 1
     scalar quiet = 0
     string str = estimator_command(estimator_name, with_candidate_list, quiet)
     assert_equal_str(strstrip(str), \
-      "panel y list0 candidate_vars --pooled") 
+      "panel y list0 candidate_vars --pooled")
 end function
 test_estimator_command()
 
 
-function void test_criterion_is_supported ()
+function void test_criterion_is_supported (void)
     print "Start with criterion_is_supported()"
-    
+
     string estimator_name = "ols"
     loop i=1..4 -q
         scalar scal = criterion_is_supported(estimator_name, $i)
@@ -131,6 +131,67 @@ function void test_criterion_is_supported ()
     endloop
 end function
 test_criterion_is_supported()
+
+
+function void test_map_crit_to_accessors (void)
+    print "Start with map_critierion_to_accessors()"
+
+    loop i=1..4 -q
+        bundle b = map_critierion_to_accessors($i)
+        assert_equal_num(nelem(b), 2)
+        assert_true(inbundle(b, "criterion_name"))
+        assert_true(inbundle(b, "criterion_accessor"))
+    endloop
+
+    bundle b = map_critierion_to_accessors(1)
+    assert_equal_str(b.criterion_name, "AIC")
+    assert_equal_str(b.criterion_accessor, "$aic")
+
+    bundle b = map_critierion_to_accessors(2)
+    assert_equal_str(b.criterion_name, "BIC")
+    assert_equal_str(b.criterion_accessor, "$bic")
+    
+    bundle b = map_critierion_to_accessors(3)
+    assert_equal_str(b.criterion_name, "HQC")
+    assert_equal_str(b.criterion_accessor, "$hqc")
+    
+    bundle b = map_critierion_to_accessors(4)
+    assert_equal_str(b.criterion_name, "CVC")
+    assert_equal_str(b.criterion_accessor, "$test")
+end function
+test_map_crit_to_accessors()
+
+
+function void test_check_estimator_name (void)
+    print "Start with check_estimator_name()"
+
+    string estimator_name = "ols"
+    check_estimator_name(estimator_name)
+
+    string estimator_name = "fixed_effects"
+    check_estimator_name(estimator_name)
+
+    string estimator_name = "random_effects"
+    check_estimator_name(estimator_name)
+
+    string estimator_name = "pooled"
+    check_estimator_name(estimator_name)
+
+    string estimator_name = "foo"
+    catch check_estimator_name(estimator_name)
+
+end function
+test_check_estimator_name()
+
+
+function void test_update_criterion_value (void)
+    print "Start with update_criterion_value()"
+
+    *** HIER WEITERMACHEN ***
+
+end function
+test_update_criterion_value
+
 
 print "huhu"
 stop

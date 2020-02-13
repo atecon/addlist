@@ -71,6 +71,7 @@ function string estimator_command (string estimator_name,
     return cmd
 end function
 
+
 # tested
 function scalar criterion_is_supported (const string estimator_name,
                                          const int criterion[1::])
@@ -87,6 +88,7 @@ function scalar criterion_is_supported (const string estimator_name,
 end function
 
 
+# tested
 function bundle map_critierion_to_accessors (const int criterion[1:4:1])
 /* Map integer value selecting criterion to name and accessor
     of specific information criterion. */
@@ -111,6 +113,7 @@ function bundle map_critierion_to_accessors (const int criterion[1:4:1])
 end function
 
 
+# tested
 function void check_estimator_name (const string estimator_name)
     /* Check whether estimator is actually supported. */
 
@@ -121,7 +124,7 @@ function void check_estimator_name (const string estimator_name)
         loop i=1..nelem(supported_estimators) -q
             printf "%s\n", supported_estimators[i]
         endloop
-        funcerr ""
+        funcerr "Not supported estimator called."
     endif
 end function
 
@@ -181,7 +184,7 @@ end function
 
 function void print_info_on_added_var (const string name_added_var,
                                        string criterion_name,
-                                       const scalar criterion_minimum,
+                                       const scalar criterion_minimum[1::],
                                        const bool quiet)
     if !quiet
         printf "Add variable '%s' \t %s = %g\n", name_added_var, \
@@ -191,7 +194,7 @@ end function
 
 
 function scalar update_criterion_value (scalar criterion_value,
-                                        scalar criterion_minimum,
+                                        scalar criterion_minimum[1::],
                                         string variable_name,
                                         string *bestx,
                                         string *name_added_var)
