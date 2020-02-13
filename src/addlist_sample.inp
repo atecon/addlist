@@ -1,8 +1,6 @@
 clear
 set verbose off
 
-include string_utils.gfn
-
 if $sysinfo.hostname == "dsb"
     include "/home/ninja/repo/addlist/src/addlist.inp"
 else
