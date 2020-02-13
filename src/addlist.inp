@@ -11,7 +11,7 @@ function void check_variable_lists (const list list0 "initial regressors",
     endif
 end function
 
-
+# tested
 function string get_quiet_string (const bool quiet)
     if quiet
         return "--quiet"
@@ -21,6 +21,7 @@ function string get_quiet_string (const bool quiet)
 end function
 
 
+# tested
 function bundle dict_models (void)
 /* Dictionary including stuff for calling estimation
     command and fcast command. */
@@ -48,6 +49,7 @@ function bundle dict_models (void)
 end function
 
 
+# tested
 function string estimator_command (string estimator_name,
                                    const bool with_candidate_list,
                                    const bool quiet)
@@ -55,32 +57,33 @@ function string estimator_command (string estimator_name,
 
     string quiet_str = get_quiet_string(quiet)
     string name_depvar = "y"
-    string list_of_regs = "list0"
+    string candidates = "list0"
 
     bundle model = dict_models()["@estimator_name"]
 
     if with_candidate_list
-        list_of_regs += " add_var"
+        candidates += " candidate_vars"
     endif
 
     string cmd = sprintf("%s %s %s %s %s", model.command, name_depvar, \
-      list_of_regs, model.estimator_option, quiet_str)
+      candidates, model.estimator_option, quiet_str)
 
     return cmd
 end function
 
-
-# FIXME: "panel" is wrong!
-function scalar check_criterion (const string estimator_name,
-                                 const int criterion)
+# tested
+function scalar criterion_is_supported (const string estimator_name,
+                                         const int criterion[1::])
     /* */
 
-    if estimator_name == "panel" && criterion == 3
-        printf "\nError: The HQC criterion is not supported for panel models.\n"
-        return 1
+    bundle CRIT = map_critierion_to_accessors(criterion)
+
+    if estimator_name != "ols" && CRIT.criterion_name == "HQC"
+        printf "\nError: The HQC criterion is not supported for panel estimators.\n"
+        return 0
     endif
 
-    return 0
+    return 1
 end function
 
 
@@ -142,7 +145,7 @@ function list compute_final_list_of_vars (const series y,
         loop foreach i list1 --quiet
             # Ugly workaround needed due to '.' in string 'list1.$i'
             string variable_name = varnames(list1)[i]
-            list add_var = @variable_name			# don't rename 'add_var'
+            list candidate_vars = @variable_name			# don't rename 'candidate_vars'
 
             string estimator_cmd = estimator_command(estimator_name, 1, 1)
             catch @estimator_cmd
@@ -221,8 +224,8 @@ function list addlist (series y "dependent variable",
     endif
     check_estimator_name(estimator_name)
 
-    scalar ret = check_criterion(estimator_name, criterion)
-    if ret
+    scalar ret = criterion_is_supported(estimator_name, criterion)
+    if !ret
         return L
     endif
 

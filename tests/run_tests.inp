@@ -8,6 +8,139 @@ include assertion.gfn
 #include extra.gfn
 
 
+function void test_get_quiet_string (void)
+    print "Start with get_quiet_string()"
+
+    string str = get_quiet_string(1)
+    assert_equal_str(str, "--quiet")
+
+    string str = get_quiet_string(0)
+    assert_equal_str(str, "")
+
+    string str = get_quiet_string(NA)
+    assert_equal_str(str, "--quiet")
+end function
+test_get_quiet_string()
+
+
+function void test_dict_models (void)
+    print "Start with dict_models()"
+    
+    bundle models = dict_models()
+    strings keys = getkeys(models)
+    
+    assert_equal_num(nelem(models), 4)
+    assert_equal_num(nelem(keys), 4)
+    
+    assert_true(inbundle(models, "ols"))
+    assert_true(inbundle(models, "fixed_effects"))
+    assert_true(inbundle(models, "random_effects"))
+    assert_true(inbundle(models, "pooled"))    
+end function
+test_dict_models()
+
+
+function void test_estimator_command (void)
+    print "Start with dict_models()"
+    
+    string estimator_name = "ols"
+    scalar with_candidate_list = 0
+    scalar quiet = 0
+    string str = estimator_command(estimator_name, with_candidate_list, quiet)
+    assert_equal_str(strstrip(str), "ols y list0")
+
+    string estimator_name = "ols"
+    scalar with_candidate_list = 1
+    scalar quiet = 0
+    string str = estimator_command(estimator_name, with_candidate_list, quiet)
+    assert_equal_str(strstrip(str), "ols y list0 candidate_vars")    
+
+    string estimator_name = "ols"
+    scalar with_candidate_list = 0
+    scalar quiet = 1
+    string str = estimator_command(estimator_name, with_candidate_list, quiet)
+    assert_equal_str(strstrip(str), "ols y list0  --quiet")    
+
+    string estimator_name = "ols"
+    scalar with_candidate_list = 1
+    scalar quiet = 1
+    string str = estimator_command(estimator_name, with_candidate_list, quiet)
+    assert_equal_str(strstrip(str), "ols y list0 candidate_vars  --quiet")    
+
+    string estimator_name = "fixed_effects"
+    scalar with_candidate_list = 1
+    scalar quiet = 1
+    string str = estimator_command(estimator_name, with_candidate_list, quiet)
+    assert_equal_str(strstrip(str), \
+      "panel y list0 candidate_vars --fixed-effects --quiet")   
+
+    string estimator_name = "random_effects"
+    scalar with_candidate_list = 1
+    scalar quiet = 1
+    string str = estimator_command(estimator_name, with_candidate_list, quiet)
+    assert_equal_str(strstrip(str), \
+      "panel y list0 candidate_vars --random-effects --quiet") 
+
+    string estimator_name = "pooled"
+    scalar with_candidate_list = 1
+    scalar quiet = 0
+    string str = estimator_command(estimator_name, with_candidate_list, quiet)
+    assert_equal_str(strstrip(str), \
+      "panel y list0 candidate_vars --pooled") 
+end function
+test_estimator_command()
+
+
+function void test_criterion_is_supported ()
+    print "Start with criterion_is_supported()"
+    
+    string estimator_name = "ols"
+    loop i=1..4 -q
+        scalar scal = criterion_is_supported(estimator_name, $i)
+        assert_true(scal)
+    endloop
+
+    string estimator_name = "fixed_effects"
+    loop i=1..4 -q
+        scalar scal = criterion_is_supported(estimator_name, $i)
+        if i != 3
+            assert_true(scal)
+        else
+            assert_false(scal)
+        endif
+    endloop
+
+    string estimator_name = "random_effects"
+    loop i=1..4 -q
+        scalar scal = criterion_is_supported(estimator_name, $i)
+        if i != 3
+            assert_true(scal)
+        else
+            assert_false(scal)
+        endif
+    endloop
+
+    string estimator_name = "pooled"
+    loop i=1..4 -q
+        scalar scal = criterion_is_supported(estimator_name, $i)
+        if i != 3
+            assert_true(scal)
+        else
+            assert_false(scal)
+        endif
+    endloop
+end function
+test_criterion_is_supported()
+
+print "huhu"
+stop
+
+
+
+
+
+
+
 open grunfeld.gdt -q -p
 function void test_valid_dates_of_y_and_xlist ()
     print "Start with valid_dates_of_y_and_xlist()"
