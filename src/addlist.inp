@@ -3,11 +3,11 @@ function void check_variable_lists (const list list0 "initial regressors",
     /* */
 
     if nelem(list0) == 0
-        funcerr "No initial specification was given"
+        funcerr "No initial specification was given."
     elif nelem(list1) == 0
-        funcerr "No candidate regressors were provided"
+        funcerr "No candidate regressors were provided."
     elif nelem(list0 && list1) > 0
-        funcerr "The two list arguments must be disjoint"
+        funcerr "The two list arguments must be disjoint."
     endif
 end function
 
@@ -74,7 +74,7 @@ end function
 
 # tested
 function scalar criterion_is_supported (const string estimator_name,
-                                         const int criterion[1::])
+                                        const int criterion[1::])
     /* */
 
     bundle CRIT = map_critierion_to_accessors(criterion)
@@ -129,7 +129,7 @@ function void check_estimator_name (const string estimator_name)
 end function
 
 
-
+# tested
 function list compute_final_list_of_vars (const series y,
                                           list list0,
                                           list list1,
@@ -137,7 +137,8 @@ function list compute_final_list_of_vars (const series y,
                                           const bundle CRIT,
                                           scalar criterion_minimum,
                                           const bool quiet)
-    /* */
+    /* Do the actual heavy work selecting the final set of
+    regressors. */
 
     string criterion_accessor = CRIT.criterion_accessor
     string name_added_var = ""
@@ -152,11 +153,11 @@ function list compute_final_list_of_vars (const series y,
 
             string estimator_cmd = estimator_command(estimator_name, 1, 1)
             catch @estimator_cmd
-            if $error					# TODO: put into function
+            if $error
                 if !quiet
-                    printf "\nWarning: Adding '%s' yields estimation error.", var_name
+                    printf "\nWarning: Adding '%s' yields estimation error.", variable_name
                 endif
-                break		# TODO: Does this break work??
+                break
             endif
 
             if CRIT.criterion_name == "CVC"
@@ -176,6 +177,7 @@ function list compute_final_list_of_vars (const series y,
         else
             break
         endif
+        
     endloop
 
     return list0
@@ -187,14 +189,15 @@ function void print_info_on_added_var (const string name_added_var,
                                        const scalar criterion_minimum[1::],
                                        const bool quiet)
     if !quiet
-        printf "Add variable '%s' \t %s = %g\n", name_added_var, \
+        printf "\nAdd variable '%s' \t %s = %g\n", name_added_var, \
           criterion_name, criterion_minimum
     endif
 end function
 
 
+# tested
 function scalar update_criterion_value (scalar criterion_value,
-                                        scalar criterion_minimum[1::],
+                                        scalar criterion_minimum,
                                         string variable_name,
                                         string *bestx,
                                         string *name_added_var)
@@ -240,19 +243,18 @@ function list addlist (series y "dependent variable",
        if !strlen(str_ret)
        return L
        endif
-    */
+     */
+       
+    bundle CRIT = map_critierion_to_accessors(criterion)
+    string criterion_accessor = CRIT.criterion_accessor  
 
     string estimator_cmd = estimator_command(estimator_name, 0, quiet)
-
     catch @estimator_cmd
-    if $error				# TODO: put into function
+    if $error
         printf "\nError: Failed to estimate baseline model by trying to execute:\n\
           '%s'\n", estimator_cmd
         return L
     endif
-
-    bundle CRIT = map_critierion_to_accessors(criterion)
-    string criterion_accessor = CRIT.criterion_accessor
 
     if CRIT.criterion_name == "CVC"
         leverage --quiet
@@ -260,7 +262,7 @@ function list addlist (series y "dependent variable",
     scalar criterion_minimum = @criterion_accessor
 
     if !quiet
-        printf "Baseline:            %s = %g\n", CRIT.criterion_name, criterion_minimum
+        printf "\nBaseline:            %s = %g\n", CRIT.criterion_name, criterion_minimum
     endif
 
     list final = compute_final_list_of_vars(y, list0, list1, estimator_name, \
@@ -274,13 +276,13 @@ end function
 
 
 function void print_summary (const series y,
-                             const list list_init,
+                             const list list_init "initial list0 passed by user",
                              const list list0 "final list of selected regressors",
                              const string criterion_name,
                              const scalar criterion_minimum,
                              const string estimator_name,
                              const bool quiet)
-    /* */
+    /* Print result and regression result with final feature list. */
 
     if !quiet
         if nelem(list0) > nelem(list_init)

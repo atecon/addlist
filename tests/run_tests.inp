@@ -3,9 +3,7 @@ clear
 
 include "./src/addlist.inp" --force
 
-#include string_utils.gfn
 include assertion.gfn
-#include extra.gfn
 
 
 function void test_get_quiet_string (void)
@@ -176,10 +174,6 @@ function void test_check_estimator_name (void)
 
     string estimator_name = "pooled"
     check_estimator_name(estimator_name)
-
-    string estimator_name = "foo"
-    catch check_estimator_name(estimator_name)
-
 end function
 test_check_estimator_name()
 
@@ -187,14 +181,203 @@ test_check_estimator_name()
 function void test_update_criterion_value (void)
     print "Start with update_criterion_value()"
 
-    *** HIER WEITERMACHEN ***
+    scalar criterion_value = 2
+    scalar criterion_minimum = 1
+    string variable_name = "foo"
+    string bestx = ""
+    string name_added_var = ""
+    scalar scal = update_criterion_value(criterion_value, criterion_minimum, \
+      variable_name, &bestx, &name_added_var)
+  
+    assert_equal_num(scal, criterion_minimum)
+    assert_equal_str(bestx, "")
+    assert_equal_str(name_added_var, "")
+    
 
+    scalar criterion_value = 1
+    scalar criterion_minimum = 2
+    string variable_name = "foo"
+    string bestx = ""
+    string name_added_var = ""
+    scalar scal = update_criterion_value(criterion_value, criterion_minimum, \
+      variable_name, &bestx, &name_added_var)
+  
+    assert_equal_num(scal, criterion_value)
+    assert_equal_str(bestx, "list1.foo")
+    assert_equal_str(name_added_var, "foo")
+
+
+    scalar criterion_value = 2
+    scalar criterion_minimum = 2
+    string variable_name = "foo"
+    string bestx = ""
+    string name_added_var = ""
+    scalar scal = update_criterion_value(criterion_value, criterion_minimum, \
+      variable_name, &bestx, &name_added_var)
+  
+    assert_equal_num(scal, criterion_minimum)
+    assert_equal_str(bestx, "")
+    assert_equal_str(name_added_var, "")
+
+
+    scalar criterion_value = 1
+    scalar criterion_minimum = 2
+    string variable_name = "foo"
+    string bestx = "list1.fufu"
+    string name_added_var = "fufu"
+    scalar scal = update_criterion_value(criterion_value, criterion_minimum, \
+      variable_name, &bestx, &name_added_var)
+  
+    assert_equal_num(scal, criterion_value)
+    assert_equal_str(bestx, "list1.foo")
+    assert_equal_str(name_added_var, "foo")
 end function
-test_update_criterion_value
+test_update_criterion_value()
 
 
-print "huhu"
-stop
+open grunfeld.gdt -q -p
+function void test_compute_final_list_of_vars (series y, list data_set)
+    print "Start with compute_final_list_of_vars(): no regressors will be added"
+
+    scalar quiet = 1
+    series y = data_set.invest
+    
+    list L0 = const 
+    list L1 = data_set.value data_set.kstock data_set.time
+    scalar criterion = 1
+    bundle CRIT = map_critierion_to_accessors(criterion)
+    scalar criterion_minimum = -10000
+    
+    # no additional variable should be selected
+    string estimator_name = "ols"
+    list L2 = compute_final_list_of_vars(y, L0, L1, estimator_name, CRIT, \
+      criterion_minimum, quiet)
+    assert_equal_num(nelem(L2), 1)
+    assert_equal_str(varnames(L2)[1], "const")
+
+    # no additional variable should be selected
+    string estimator_name = "fixed_effects"
+    list L2 = compute_final_list_of_vars(y, L0, L1, estimator_name, CRIT, \
+      criterion_minimum, quiet)
+    assert_equal_num(nelem(L2), 1)
+    assert_equal_str(varnames(L2)[1], "const")
+
+    # no additional variable should be selected
+    string estimator_name = "random_effects"
+    list L2 = compute_final_list_of_vars(y, L0, L1, estimator_name, CRIT, \
+      criterion_minimum, quiet)
+    assert_equal_num(nelem(L2), 1)
+    assert_equal_str(varnames(L2)[1], "const")
+
+    # no additional variable should be selected
+    string estimator_name = "pooled"
+    list L2 = compute_final_list_of_vars(y, L0, L1, estimator_name, CRIT, \
+      criterion_minimum, quiet)
+    assert_equal_num(nelem(L2), 1)
+    assert_equal_str(varnames(L2)[1], "const")
+end function
+test_compute_final_list_of_vars(invest, dataset)
+
+
+function void test_compute_final_list_of_vars (series y, list data_set)
+    print "Start with compute_final_list_of_vars():"
+    print "Based on estimator, some variables should be added based on AIC"
+
+    scalar quiet = 0
+    series y = data_set.invest
+    
+    list L0 = const 
+    list L1 = data_set.value data_set.kstock data_set.time
+    scalar criterion = 1
+    bundle CRIT = map_critierion_to_accessors(criterion)
+    scalar criterion_minimum = 2500
+    
+    string estimator_name = "ols"
+    list L2 = compute_final_list_of_vars(y, L0, L1, estimator_name, CRIT, \
+      criterion_minimum, quiet)
+    assert_equal_num(nelem(L2), 3)
+    assert_equal_str(varnames(L2)[1], "const")
+    assert_equal_str(varnames(L2)[2], "value")
+    assert_equal_str(varnames(L2)[3], "kstock")
+
+    string estimator_name = "fixed_effects"
+    list L2 = compute_final_list_of_vars(y, L0, L1, estimator_name, CRIT, \
+      criterion_minimum, quiet)
+    assert_equal_num(nelem(L2), 4)
+    assert_equal_str(varnames(L2)[1], "const")
+    assert_equal_str(varnames(L2)[2], "kstock")
+    assert_equal_str(varnames(L2)[3], "value")
+    assert_equal_str(varnames(L2)[4], "time")
+
+    string estimator_name = "random_effects"
+    list L2 = compute_final_list_of_vars(y, L0, L1, estimator_name, CRIT, \
+      criterion_minimum, quiet)
+    assert_equal_num(nelem(L2), 3)
+    assert_equal_str(varnames(L2)[1], "const")
+    assert_equal_str(varnames(L2)[2], "value")
+    assert_equal_str(varnames(L2)[3], "kstock")
+
+    string estimator_name = "pooled"
+    list L2 = compute_final_list_of_vars(y, L0, L1, estimator_name, CRIT, \
+      criterion_minimum, quiet)
+    assert_equal_num(nelem(L2), 3)
+    assert_equal_str(varnames(L2)[1], "const")
+    assert_equal_str(varnames(L2)[2], "value")
+    assert_equal_str(varnames(L2)[3], "kstock")
+end function
+test_compute_final_list_of_vars(invest, dataset)
+
+
+function void test_compute_final_list_of_vars (series y, list data_set)
+    print "Start with compute_final_list_of_vars():"
+    print "Based on estimator, some variables should be added based on BIC"
+
+    scalar quiet = 0
+    series y = data_set.invest
+    
+    list L0 = const 
+    list L1 = data_set.value data_set.kstock data_set.time
+    scalar criterion = 2
+    bundle CRIT = map_critierion_to_accessors(criterion)
+    scalar criterion_minimum = 2500
+    
+    string estimator_name = "ols"
+    list L2 = compute_final_list_of_vars(y, L0, L1, estimator_name, CRIT, \
+      criterion_minimum, quiet)
+    assert_equal_num(nelem(L2), 3)
+    assert_equal_str(varnames(L2)[1], "const")
+    assert_equal_str(varnames(L2)[2], "value")
+    assert_equal_str(varnames(L2)[3], "kstock")
+
+    string estimator_name = "fixed_effects"
+    list L2 = compute_final_list_of_vars(y, L0, L1, estimator_name, CRIT, \
+      criterion_minimum, quiet)
+    assert_equal_num(nelem(L2), 4)
+    assert_equal_str(varnames(L2)[1], "const")
+    assert_equal_str(varnames(L2)[2], "kstock")
+    assert_equal_str(varnames(L2)[3], "value")
+    assert_equal_str(varnames(L2)[4], "time")
+
+    string estimator_name = "random_effects"
+    list L2 = compute_final_list_of_vars(y, L0, L1, estimator_name, CRIT, \
+      criterion_minimum, quiet)
+    assert_equal_num(nelem(L2), 3)
+    assert_equal_str(varnames(L2)[1], "const")
+    assert_equal_str(varnames(L2)[2], "value")
+    assert_equal_str(varnames(L2)[3], "kstock")
+
+    string estimator_name = "pooled"
+    list L2 = compute_final_list_of_vars(y, L0, L1, estimator_name, CRIT, \
+      criterion_minimum, quiet)
+    assert_equal_num(nelem(L2), 3)
+    assert_equal_str(varnames(L2)[1], "const")
+    assert_equal_str(varnames(L2)[2], "value")
+    assert_equal_str(varnames(L2)[3], "kstock")
+end function
+test_compute_final_list_of_vars(invest, dataset)
+
+
+*** HIER WEITZERMACHEN FÜR CVC
 
 
 
@@ -203,32 +386,13 @@ stop
 
 
 open grunfeld.gdt -q -p
-function void test_valid_dates_of_y_and_xlist ()
-    print "Start with valid_dates_of_y_and_xlist()"
+function void test_addlist (series y, list data_set)
+    
+    
+
 end function
-test_valid_dates_of_y_and_xlist()
+test_addlist((invest, dataset))
 
 
 
 printf "\nInfo: All tests passed.\n"
-
-
-function void print_summary (const list list0,
-                             const list final,
-                             const string criterion_name,
-                             const scalar criterion_minimum,
-                             const string estimator_name,
-                             const bool quiet)
-    /* */
-
-    if !quiet
-        if nelem(final) > nelem(list0)
-            printf "\nMinimized %s = %g, with this model:\n", CRIT.criterion_name, criterion_minimum
-
-            string estimator_cmd = estimator_command(estimator_name, 0, quiet)
-            @estimator_cmd
-        else
-            printf "\nNo improvement was achieved, no regressors added\n"
-        endif
-    endif
-end function
